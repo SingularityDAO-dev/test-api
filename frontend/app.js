@@ -1,7 +1,7 @@
 // Test API Frontend with Knowledge Graph Canvas
 const API_URL = window.location.hostname === 'localhost' 
     ? 'http://localhost:8000' 
-    : window.location.origin;
+    : 'https://backend-production-b433.up.railway.app';
 
 class App {
     constructor() {

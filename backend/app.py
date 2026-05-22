@@ -10,6 +10,14 @@ from pathlib import Path
 import json
 import uvicorn
 
+# Sentry monitoring
+import sentry_sdk
+sentry_sdk.init(
+    dsn="https://db480c357852bccab74c9ff2eb4a680a@o4511432864563200.ingest.de.sentry.io/4511433692807249",
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+)
+
 app = FastAPI(title="Test API", version="1.0.0")
 
 # CORS for frontend
