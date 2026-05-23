@@ -8,6 +8,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from pathlib import Path
 import json
+import random
 import uvicorn
 
 # Sentry monitoring
@@ -131,6 +132,11 @@ def get_graph_full():
     if not html_path.exists():
         raise HTTPException(status_code=404, detail="Graph HTML not found")
     return FileResponse(html_path)
+
+@app.get("/random")
+def get_random():
+    """Return a random number between 1 and 100."""
+    return {"random": random.randint(1, 100)}
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
