@@ -1,0 +1,28 @@
+import { describe, it, expect, beforeAll } from 'vitest';
+import request from 'supertest';
+import type { Express } from 'express';
+import { createServer } from '../../src/infrastructure/server.js';
+import { RandomService } from '../../src/domain/services/randomService.js';
+import { CryptoRandomGenerator } from '../../src/domain/utils/randomGenerator.js';
+
+describe('GET /random', () => {
+  let app: Express;
+
+  beforeAll(() => {
+    const generator = new CryptoRandomGenerator();
+    const service = new RandomService(generator);
+    app = createServer(service);
+  });
+
+  it('responds with 200 and a JSON body containing a numeric random field', async () => {
+    const res = await request(app)
+      .get('/random')
+      .expect('Content-Type', /json/)
+      .expect(200);
+
+    expect(res.body).toHaveProperty('random');
+    expect(typeof res.body.random).toBe('number');
+    expect(res.body.random).toBeGreaterThanOrEqual(0.0);
+    expect(res.body.random).toBeLessThan(1.0);
+  });
+});
