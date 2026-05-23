@@ -10,12 +10,16 @@ from pathlib import Path
 import json
 import uvicorn
 
-# TODO: Add Sentry monitoring
-# import sentry_sdk
-# sentry_sdk.init(
-#     dsn="https://db480c357852bccab74c9ff2eb4a680a@o4511432864563200.ingest.de.sentry.io/4511433692807249",
-#     traces_sample_rate=1.0,
-# )
+# Sentry monitoring
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+sentry_sdk.init(
+    dsn="https://db480c357852bccab74c9ff2eb4a680a@o4511432864563200.ingest.de.sentry.io/4511433692807249",
+    traces_sample_rate=1.0,
+    profiles_sample_rate=1.0,
+    integrations=[FastApiIntegration()],
+)
 
 app = FastAPI(title="Test API", version="1.0.0")
 
