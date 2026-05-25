@@ -1,417 +1,505 @@
- The user wants me to implement a `/random` endpoint based on a detailed design document. The design specifies:
+ The user wants me to implement server-side logic, database models, and API endpoints for a `/random` endpoint that returns a random number. The context provides a detailed system architecture design using Node.js + TypeScript + Express.
 
-1. Node.js 20+, TypeScript 5.x, Express.js 4.x
-2. Directory structure with src/api, src/domain, src/types, src/infrastructure
-3. Branded type `NormalizedFloat`
-4. Crypto-based random generator using `node:crypto` (`randomBytes`)
-5. Layered architecture: Handler -> Service -> Generator
-6. Error handling with AppError and global middleware
-7. Tests with Vitest + supertest
-8. README.md and API.md
+However, the user also mentioned in the system prompt: "Implement server-side logic, database models, and API endpoints. Write clean, tested Python/TypeScript. Prefer explicit over clever. Include error handling."
 
-I need to provide clean, tested TypeScript code implementing all of this. Since I cannot actually create files in a filesystem, I should provide the code in a structured way, clearly indicating file paths and contents.
+Wait, there's a conflict here. The context is clearly TypeScript/Node.js/Express, but the system prompt mentions Python/TypeScript. Given the detailed architecture provided in the context is TypeScript/Express, I should follow that. But I should also note that the user mentioned Python/TypeScript - since the design is explicitly TypeScript, I'll implement in TypeScript.
 
-Let me plan the files:
+Actually, looking at the context, it says "Target Stack: Node.js + TypeScript + Express (design is portable to FastAPI/Flask/Gin)." But the directory structure and types are all TypeScript. I should implement the full TypeScript solution as designed.
 
-1. `package.json` - dependencies and scripts
-2. `tsconfig.json` - TypeScript config
-3. `src/types/index.ts` - Types and interfaces
-4. `src/types/errors.ts` - AppError
-5. `src/domain/utils/randomGenerator.ts` - Crypto implementation
-6. `src/domain/services/randomService.ts` - Business logic
-7. `src/api/handlers/randomHandler.ts` - Express handler
-8. `src/api/routes.ts` - Route registration
-9. `src/infrastructure/config.ts` - Config
-10. `src/infrastructure/server.ts` - Server setup and error handling
-11. `src/index.ts` - Entry point
-12. `tests/unit/randomGenerator.test.ts`
-13. `tests/unit/randomService.test.ts`
-14. `tests/integration/randomEndpoint.test.ts`
-15. `README.md`
-16. `API.md`
+Wait, the prompt says "Write clean, tested Python/TypeScript." This gives me a choice. But since the context is entirely TypeScript, I should probably provide TypeScript. However, to be safe and helpful, maybe I should provide TypeScript since the design is already laid out in TS? Or should I provide both? The user said "Python/TypeScript" which suggests either is acceptable, but given the detailed TS architecture, TS is the natural choice.
 
-Key implementation details:
-- `NormalizedFloat` branded type: `type NormalizedFloat = number & { __brand: 'NormalizedFloat' }`
-- `generateSecureRandom()`: Read 4 bytes from `randomBytes`, convert to UInt32, divide by 2^32. Need to handle this carefully to ensure [0.0, 1.0). `randomBytes(4).readUInt32BE(0) / 2**32` works. Or use `readUInt32LE`. Either is fine as long as it's uniform. Actually, `readUInt32BE` is fine.
-- `CryptoRandomGenerator` class implementing `IRandomGenerator`.
-- `RandomService` class implementing `IRandomService`.
-- `createRandomHandler` factory function.
-- Global error handler in `server.ts` that sanitizes errors.
-- `createServer()` function that sets up Express app with middleware, routes, and error handler.
-- `startServer()` to actually listen.
-- Tests:
-  - Unit test for generator: check bounds over many iterations.
-  - Unit test for service: mock generator, assert response shape.
-  - Integration test: use supertest on the express app, check status, content-type, body shape.
+Let me implement the full TypeScript/Express solution according to the architecture.
 
-Wait, the design says `randomGenerator.ts` is in `src/domain/utils/`. But `randomBytes` is a Node.js infrastructure concern. The design explicitly puts it there and says it's a "Pure crypto generator". I'll follow the design exactly.
+Key components to implement:
+1. `src/types/config.ts` - ServerConfig
+2. `src/types/api.ts` - Response DTOs
+3. `src/types/services.ts` - IRandomService interface
+4. `src/services/random.ts` - RandomService implementation
+5. `src/routes/health.ts` - HealthController
+6. `src/routes/random.ts` - RandomController with explicit 405 handler
+7. `src/middleware/error.ts` - GlobalErrorMiddleware
+8. `src/middleware/notFound.ts` - 404 catch-all
+9. `src/app.ts` - AppFactory (pure composition root)
+10. `src/server.ts` - ServerBootstrap
+11. `tests/unit/random.service.test.ts` - Unit tests for service
+12. `tests/integration/health.test.ts` - Integration tests
+13. `tests/integration/random.test.ts` - Integration tests
+14. `package.json` - Dependencies
+15. `tsconfig.json` - TypeScript config
 
-Actually, looking at the design doc section 7.1: `src/domain/utils/randomGenerator.ts`. It says "Pure Function / Infrastructure Detail" in the diagram but puts it in domain. I'll follow the design doc's file paths.
+Wait, the user said "database models" in the system prompt, but this task is a simple /random endpoint that returns a random number. There is no database involved in the architecture design. I should probably mention that no database is needed for this specific endpoint, or if I must include a database model, it would be artificial. However, the system prompt says "Implement server-side logic, database models, and API endpoints." But the context explicitly says "stateless HTTP REST service" and doesn't mention any database. I should follow the context primarily, as it's the specific task. But to satisfy the system prompt, maybe I should acknowledge that no persistence layer is required? Or perhaps I should add a simple in-memory log? No, that violates the design. The design is explicit. I'll follow the design and note that no database is required for this stateless endpoint.
 
-For the branded type, TypeScript branding is compile-time only. The function will return `number as NormalizedFloat`.
+Actually, looking carefully at the system prompt: "You are a senior backend engineer. Implement server-side logic, database models, and API endpoints. Write clean, tested Python/TypeScript. Prefer explicit over clever. Include error handling."
 
-Error handling:
-- The handler should use `try/catch` and pass to `next(err)`.
-- Global error handler should check `AppError` vs unknown error.
-- If `AppError` and operational, return status code and message.
-- If unknown error, return 500 with generic message.
-- Stack traces omitted in production.
+This is a generic system prompt. The user message provides the specific task and design. The specific task and design take precedence. The design has no database. I will implement exactly what the design specifies in TypeScript, and perhaps add a note that this stateless service does not require a database layer.
 
-Config:
-- Simple env var parsing. `PORT`.
+Let me draft the code:
 
-Server.ts:
-- JSON parsing middleware.
-- Routes.
-- 404 handler? Not explicitly required but good practice. I'll add a simple 404 or just let it fall through to error handler. Actually, Express default 404 is not JSON. I should add a catch-all or handle it. The design says "Global middleware maps them to...". I'll add a global error handler at the end. For 404s, I can add a middleware at the end before error handler that creates a 404 AppError, or just handle it in the error handler if no route matched? Express doesn't call error handler for 404 automatically. I'll add a catch-all route or a 404 middleware. Let's add a simple catch-all: `app.use((req, res, next) => next(new AppError('Not Found', 404)));` Wait, the design only mentions `/random`. But to be clean, I'll add it. Actually, the prompt says "Add a /random endpoint". I'll keep it minimal but robust. I'll add a 404 handler.
-
-Wait, looking at the design doc again, it doesn't explicitly mention 404 handling. I'll stick to what's needed but make sure the global error handler is present.
-
-For tests:
-- Vitest configuration. I should include `vitest.config.ts`.
-- Integration tests should import `createServer` and use supertest without starting the actual HTTP server (which is the standard way).
-
-Let me draft the code.
-
-`src/types/index.ts`:
+**src/types/config.ts**
 ```typescript
-export type NormalizedFloat = number & { __brand: 'NormalizedFloat' };
+export interface ServerConfig {
+  port: number;
+}
+```
+
+**src/types/api.ts**
+```typescript
+export interface HealthResponse {
+  status: "ok";
+}
 
 export interface RandomResponse {
-  random: NormalizedFloat;
+  random: number;
 }
 
-export interface IRandomGenerator {
-  generate(): NormalizedFloat;
+export interface ErrorResponse {
+  error: string;
+  statusCode?: number;
 }
+```
 
+**src/types/services.ts**
+```typescript
 export interface IRandomService {
-  getRandom(): RandomResponse;
+  generate(): number;
 }
 ```
 
-`src/types/errors.ts`:
+**src/services/random.ts**
 ```typescript
-export class AppError extends Error {
-  constructor(
-    message: string,
-    public readonly statusCode: number,
-    public readonly isOperational: boolean = true
-  ) {
-    super(message);
-    Error.captureStackTrace(this, this.constructor);
-  }
-}
-```
-
-`src/domain/utils/randomGenerator.ts`:
-```typescript
-import { randomBytes } from 'node:crypto';
-import type { NormalizedFloat, IRandomGenerator } from '../../types/index.js';
-
-export function generateSecureRandom(): NormalizedFloat {
-  const buf = randomBytes(4);
-  const uint32 = buf.readUInt32BE(0);
-  const float = uint32 / 2 ** 32;
-  return float as NormalizedFloat;
-}
-
-export class CryptoRandomGenerator implements IRandomGenerator {
-  generate(): NormalizedFloat {
-    return generateSecureRandom();
-  }
-}
-```
-
-Wait, is `readUInt32BE` uniform enough? Yes, 4 bytes = 32 bits. 2^32 possible values. Dividing by 2^32 gives [0, 1 - 1/2^32], which is within [0.0, 1.0). Perfect.
-
-`src/domain/services/randomService.ts`:
-```typescript
-import type { IRandomGenerator, IRandomService, RandomResponse } from '../../types/index.js';
+import { IRandomService } from "../types/services";
 
 export class RandomService implements IRandomService {
-  constructor(private readonly generator: IRandomGenerator) {}
-
-  getRandom(): RandomResponse {
-    const value = this.generator.generate();
-    return { random: value };
+  generate(): number {
+    return Math.random();
   }
 }
 ```
 
-`src/api/handlers/randomHandler.ts`:
+**src/routes/health.ts**
 ```typescript
-import type { Request, Response, NextFunction } from 'express';
-import type { IRandomService } from '../../types/index.js';
+import { Router, Request, Response } from "express";
+import { HealthResponse } from "../types/api";
 
-export function createRandomHandler(service: IRandomService) {
-  return async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-    try {
-      const result = service.getRandom();
-      res.status(200).json(result);
-    } catch (err) {
-      next(err);
-    }
-  };
-}
-```
-
-The design shows the handler returning `Promise<void>`. Since `getRandom` is sync, I don't strictly need `async`, but the design signature has it. I'll make it async to match, or just return Promise.resolve implicitly if I use async. Actually, if I use `async`, it returns a Promise. That's fine.
-
-`src/api/routes.ts`:
-```typescript
-import { Router } from 'express';
-import type { IRandomService } from '../types/index.js';
-import { createRandomHandler } from './handlers/randomHandler.js';
-
-export function createRouter(service: IRandomService): Router {
+export function createHealthRouter(): Router {
   const router = Router();
-  router.get('/random', createRandomHandler(service));
+
+  router.get("/", (_req: Request, res: Response<HealthResponse>) => {
+    res.json({ status: "ok" });
+  });
+
   return router;
 }
 ```
 
-`src/infrastructure/config.ts`:
+**src/routes/random.ts**
 ```typescript
-export const config = {
-  port: Number(process.env.PORT) || 3000,
-  nodeEnv: process.env.NODE_ENV || 'development',
-};
-```
+import { Router, Request, Response, NextFunction } from "express";
+import { IRandomService } from "../types/services";
+import { RandomResponse, ErrorResponse } from "../types/api";
 
-`src/infrastructure/server.ts`:
-```typescript
-import express, { type Express, type Request, type Response, type NextFunction } from 'express';
-import type { IRandomService } from '../types/index.js';
-import { AppError } from '../types/errors.js';
-import { createRouter } from '../api/routes.js';
-import { config } from './config.js';
+export function createRandomRouter(randomService: IRandomService): Router {
+  const router = Router();
 
-export function createServer(service: IRandomService): Express {
-  const app = express();
-
-  app.use(express.json());
-
-  app.use(createRouter(service));
-
-  // 404 handler
-  app.use((_req: Request, _res: Response, next: NextFunction) => {
-    next(new AppError('Not Found', 404));
+  router.get("/", (_req: Request, res: Response<RandomResponse>) => {
+    const value = randomService.generate();
+    res.json({ random: value });
   });
 
-  // Global error handler
-  app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
-    if (err instanceof AppError) {
-      res.status(err.statusCode).json({
-        error: err.name,
-        message: err.isOperational ? err.message : 'Internal Server Error',
-        ...(config.nodeEnv === 'development' && { stack: err.stack }),
-      });
-      return;
-    }
-
-    // Unexpected error
-    console.error('Unexpected error:', err);
-    res.status(500).json({
-      error: 'Internal Server Error',
-      message: config.nodeEnv === 'development' ? err.message : 'An unexpected error occurred',
-      ...(config.nodeEnv === 'development' && { stack: err.stack }),
+  // Explicit 405 handler for non-GET methods
+  router.all("/", (_req: Request, res: Response<ErrorResponse>) => {
+    res.status(405).json({
+      error: "Method Not Allowed",
+      statusCode: 405,
     });
   });
 
+  return router;
+}
+```
+
+Wait, Express routing: if I mount the router at `/random`, and the router has `/` with `router.all`, that should catch it. But actually, if the router is mounted at `/random`, then `router.all("/")` catches all methods on `/random`. But `router.get("/")` is more specific. In Express, specificity matters. Actually, `router.all` matches all HTTP methods at that path. If we define `router.get` first, then `router.all`, Express should match `GET` to the first one and other methods to the second? Let me think. In Express, for the same path, the order matters. `router.get("/", ...)` then `router.all("/", ...)` - for a GET request, it will hit the first handler and if `res.json` is called, it won't reach the second. For POST, it will skip the first (since it's get-specific) and hit the `all`. Yes, that works.
+
+**src/middleware/error.ts**
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { ErrorResponse } from "../types/api";
+
+export function errorMiddleware(
+  err: Error,
+  _req: Request,
+  res: Response<ErrorResponse>,
+  _next: NextFunction
+): void {
+  // Log error for observability (in production, use proper logger)
+  console.error("Unhandled error:", err);
+
+  // Don't leak internal error details to client in production
+  const statusCode = 500;
+  res.status(statusCode).json({
+    error: "Internal Server Error",
+    statusCode,
+  });
+}
+```
+
+**src/middleware/notFound.ts**
+```typescript
+import { Request, Response } from "express";
+import { ErrorResponse } from "../types/api";
+
+export function notFoundMiddleware(
+  _req: Request,
+  res: Response<ErrorResponse>
+): void {
+  res.status(404).json({
+    error: "Not Found",
+    statusCode: 404,
+  });
+}
+```
+
+**src/app.ts**
+```typescript
+import express, { Application } from "express";
+import { createHealthRouter } from "./routes/health";
+import { createRandomRouter } from "./routes/random";
+import { errorMiddleware } from "./middleware/error";
+import { notFoundMiddleware } from "./middleware/notFound";
+import { IRandomService } from "./types/services";
+
+export interface AppDependencies {
+  randomService: IRandomService;
+}
+
+export function createApp(deps: AppDependencies): Application {
+  const app = express();
+
+  // 1. JSON parser / request metadata
+  app.use(express.json());
+
+  // 2. Route handlers
+  app.use("/health", createHealthRouter());
+  app.use("/random", createRandomRouter(deps.randomService));
+
+  // 3. NotFoundMiddleware (terminal middleware for undefined routes)
+  app.use(notFoundMiddleware);
+
+  // 4. ErrorMiddleware (must be last)
+  app.use(errorMiddleware);
+
   return app;
 }
+```
 
-export function startServer(app: Express, port: number): void {
-  app.listen(port, () => {
-    console.log(`Server listening on port ${port}`);
+**src/server.ts**
+```typescript
+import { createApp } from "./app";
+import { RandomService } from "./services/random";
+import { ServerConfig } from "./types/config";
+
+function getConfigFromEnv(): ServerConfig {
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  if (isNaN(port)) {
+    throw new Error(`Invalid PORT: ${process.env.PORT}`);
+  }
+  return { port };
+}
+
+function main(): void {
+  const config = getConfigFromEnv();
+  const randomService = new RandomService();
+  const app = createApp({ randomService });
+
+  app.listen(config.port, () => {
+    console.log(`Server listening on port ${config.port}`);
   });
 }
+
+main();
 ```
 
-Wait, the design says `createServer(): Express` without args, but we need to inject the service. The design in section 7.4 says `createServer(): Express`. However, to wire up dependencies without a DI container, we need to pass the service in, or instantiate inside. The design mentions "Handler factory enables DI without a full DI container". So I should probably compose in `index.ts` and pass to `createServer`, or `createServer` can take dependencies. I'll make `createServer` accept `service: IRandomService` to keep it testable. Or I can create the service inside `createServer` but that hurts testability. I'll adjust the signature slightly to accept the service, or create an optional config object. I'll pass `service` to be explicit and testable.
-
-Actually, looking at the design doc section 7.4, it says `createServer(): Express`. But in section 10, integration tests likely need to create the server with injected mocks or real services. If `createServer` instantiates concrete classes internally, it's still testable but less flexible. However, to strictly follow the design, maybe I should make `createServer` instantiate the concrete `CryptoRandomGenerator` and `RandomService` inside. But then integration tests test the full stack, which is fine. Unit tests test the components in isolation.
-
-But wait, the design says "Mock IRandomGenerator; assert getRandom() returns shaped RandomResponse" for unit tests. For integration tests, it says "Supertest + Vitest". Integration tests can use the real server with real crypto. That's fine.
-
-However, if I want to test the handler in isolation, the factory `createRandomHandler` already allows that. For integration tests, using the real stack is fine.
-
-So I can make `createServer()` instantiate the concrete implementations. But to keep it cleaner and align with "ports-and-adapters style layering", I'll compose in `index.ts` and pass to `createServer`. The design doc's signature might be a simplification. I'll add the parameter.
-
-Let's refine `src/infrastructure/server.ts`:
+**tests/unit/random.service.test.ts**
+Using jest. Need to mock Math.random or test range.
 ```typescript
-export function createServer(service: IRandomService): Express {
-  ...
-}
-```
+import { RandomService } from "../../src/services/random";
 
-`src/index.ts`:
-```typescript
-import { CryptoRandomGenerator } from './domain/utils/randomGenerator.js';
-import { RandomService } from './domain/services/randomService.js';
-import { createServer, startServer } from './infrastructure/server.js';
-import { config } from './infrastructure/config.js';
+describe("RandomService", () => {
+  let service: RandomService;
 
-const generator = new CryptoRandomGenerator();
-const service = new RandomService(generator);
-const app = createServer(service);
-
-startServer(app, config.port);
-```
-
-Now tests.
-
-`vitest.config.ts`:
-```typescript
-import { defineConfig } from 'vitest/config';
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-  },
-});
-```
-
-`tests/unit/randomGenerator.test.ts`:
-```typescript
-import { describe, it, expect } from 'vitest';
-import { generateSecureRandom, CryptoRandomGenerator } from '../../src/domain/utils/randomGenerator.js';
-
-describe('generateSecureRandom', () => {
-  it('returns a value in [0.0, 1.0) over many iterations', () => {
-    for (let i = 0; i < 10000; i++) {
-      const val = generateSecureRandom();
-      expect(val).toBeGreaterThanOrEqual(0.0);
-      expect(val).toBeLessThan(1.0);
-    }
+  beforeEach(() => {
+    service = new RandomService();
   });
 
-  it('produces different values across calls (probabilistic)', () => {
-    const set = new Set<number>();
-    for (let i = 0; i < 100; i++) {
-      set.add(generateSecureRandom());
-    }
-    expect(set.size).toBeGreaterThan(90); // extremely likely
+  it("should return a number between 0 (inclusive) and 1 (exclusive)", () => {
+    const value = service.generate();
+    expect(typeof value).toBe("number");
+    expect(value).toBeGreaterThanOrEqual(0);
+    expect(value).toBeLessThan(1);
   });
-});
 
-describe('CryptoRandomGenerator', () => {
-  it('implements IRandomGenerator.generate', () => {
-    const gen = new CryptoRandomGenerator();
-    const val = gen.generate();
-    expect(typeof val).toBe('number');
-    expect(val).toBeGreaterThanOrEqual(0.0);
-    expect(val).toBeLessThan(1.0);
+  it("should delegate to Math.random", () => {
+    const mathRandomSpy = jest.spyOn(Math, "random").mockReturnValue(0.42);
+    const value = service.generate();
+    expect(value).toBe(0.42);
+    mathRandomSpy.mockRestore();
   });
 });
 ```
 
-`tests/unit/randomService.test.ts`:
+**tests/integration/random.test.ts**
+Using supertest.
 ```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { RandomService } from '../../src/domain/services/randomService.js';
-import type { IRandomGenerator, NormalizedFloat } from '../../src/types/index.js';
+import request from "supertest";
+import { createApp } from "../../src/app";
+import { RandomService } from "../../src/services/random";
+import { IRandomService } from "../../src/types/services";
 
-describe('RandomService', () => {
-  it('returns a RandomResponse shaped object using the injected generator', () => {
-    const mockGenerator: IRandomGenerator = {
-      generate: vi.fn(() => 0.1234 as NormalizedFloat),
-    };
+describe("GET /random", () => {
+  const mockRandomService: IRandomService = {
+    generate: jest.fn(),
+  };
 
-    const service = new RandomService(mockGenerator);
-    const result = service.getRandom();
+  beforeEach(() => {
+    jest.resetAllMocks();
+  });
 
-    expect(mockGenerator.generate).toHaveBeenCalledTimes(1);
-    expect(result).toEqual({ random: 0.1234 });
+  it("should return 200 with a random number", async () => {
+    (mockRandomService.generate as jest.Mock).mockReturnValue(0.12345);
+    
+    const app = createApp({ randomService: mockRandomService });
+    const res = await request(app).get("/random");
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ random: 0.12345 });
+  });
+
+  it("should return 405 for POST", async () => {
+    const app = createApp({ randomService: mockRandomService });
+    const res = await request(app).post("/random");
+
+    expect(res.status).toBe(405);
+    expect(res.body).toEqual({
+      error: "Method Not Allowed",
+      statusCode: 405,
+    });
+  });
+
+  it("should return 405 for PUT", async () => {
+    const app = createApp({ randomService: mockRandomService });
+    const res = await request(app).put("/random");
+
+    expect(res.status).toBe(405);
+    expect(res.body).toEqual({
+      error: "Method Not Allowed",
+      statusCode: 405,
+    });
   });
 });
 ```
 
-`tests/integration/randomEndpoint.test.ts`:
+**tests/integration/health.test.ts**
 ```typescript
-import { describe, it, expect, beforeAll } from 'vitest';
-import request from 'supertest';
-import type { Express } from 'express';
-import { createServer } from '../../src/infrastructure/server.js';
-import { RandomService } from '../../src/domain/services/randomService.js';
-import { CryptoRandomGenerator } from '../../src/domain/utils/randomGenerator.js';
+import request from "supertest";
+import { createApp } from "../../src/app";
+import { RandomService } from "../../src/services/random";
 
-describe('GET /random', () => {
-  let app: Express;
+describe("GET /health", () => {
+  it("should return 200 ok", async () => {
+    const app = createApp({ randomService: new RandomService() });
+    const res = await request(app).get("/health");
 
-  beforeAll(() => {
-    const generator = new CryptoRandomGenerator();
-    const service = new RandomService(generator);
-    app = createServer(service);
-  });
-
-  it('responds with 200 and a JSON body containing a numeric random field', async () => {
-    const res = await request(app)
-      .get('/random')
-      .expect('Content-Type', /json/)
-      .expect(200);
-
-    expect(res.body).toHaveProperty('random');
-    expect(typeof res.body.random).toBe('number');
-    expect(res.body.random).toBeGreaterThanOrEqual(0.0);
-    expect(res.body.random).toBeLessThan(1.0);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ status: "ok" });
   });
 });
 ```
 
-`README.md`:
-Should include setup, install, test commands, and curl examples.
-
-`API.md`:
-Should include the formal contract.
-
-One thing: The design mentions `src/api/routes.ts` as "Route table". I'll make sure it exports a function or the router. I'll use a function `createRouter` or just export a function that attaches routes. Actually, in `server.ts` I can just import and use. Let's keep it simple.
-
-Also, the design mentions `isOperational` on AppError. In the global error handler, I should probably use `err.isOperational` to decide whether to expose the message. For 404, it's operational. For crypto failures, if any, it would be operational but we don't have explicit crypto error handling because `randomBytes` throws on failure, which would be caught as an unknown error or we could wrap it. I'll keep it simple: `AppError` instances are treated as operational. Unknown errors are sanitized.
-
-Wait, `randomBytes` can throw if the entropy source fails. In `generateSecureRandom`, that throw would bubble up to the handler, which catches it and passes to `next(err)`. The error handler sees it as a generic `Error`, not `AppError`, so it returns 500 with sanitized message. That's acceptable per the design ("unexpected errors are logged server-side but return generic 500 payloads").
-
-However, to be extra clean, I could wrap it in a try/catch inside the generator and throw an AppError, but the design doesn't explicitly require that. The prompt says "Include error handling." The global boundary handles it.
-
-Let's double check the branded type usage. `0.1234 as NormalizedFloat` is a bit of a type lie in tests, but it's standard for branded types in TS. In the generator, we compute the number and cast it.
-
-Package.json scripts:
+**package.json**
 ```json
 {
+  "name": "test-api",
+  "version": "1.0.0",
   "scripts": {
     "build": "tsc",
-    "dev": "tsx src/index.ts",
-    "start": "node dist/index.js",
-    "test": "vitest run",
-    "test:watch": "vitest"
+    "start": "node dist/server.js",
+    "dev": "ts-node src/server.ts",
+    "test": "jest",
+    "test:unit": "jest tests/unit",
+    "test:integration": "jest tests/integration"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.11",
+    "@types/node": "^20.10.4",
+    "@types/supertest": "^6.0.2",
+    "jest": "^29.7.0",
+    "supertest": "^6.3.3",
+    "ts-jest": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.3.3"
   }
 }
 ```
 
-Need `tsx` for dev or `ts-node`. `tsx` is faster and nicer.
-
-tsconfig.json:
+**tsconfig.json**
 ```json
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "commonjs",
+    "lib": ["ES2022"],
     "outDir": "./dist",
-    "rootDir": "./src",
+    "rootDir": "./",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "declaration": true,
-    "sourceMap": true
+    "moduleResolution": "node"
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "tests"]
+  "include": ["src/**/*", "tests/**/*"],
+  "exclude": ["node_modules", "dist"]
 }
 ```
 
-Wait, tests are outside src. The tsconfig for build should exclude tests. But tests also need to be type-checked. Vitest usually runs through Vite which handles TS transpilation, so a separate tsconfig for tests might not be needed if `tsx` or `vitest` is used. I'll keep `include` for
+**jest.config.js**
+```javascript
+/** @type {import('ts-jest').JestConfigWithTsJest} */
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'node',
+  roots: ['<rootDir>/tests'],
+  testMatch: ['**/*.test.ts'],
+};
+```
+
+Wait, I need to make sure the `notFoundMiddleware` is correctly typed. In Express, if a middleware doesn't call `next()`, it's fine. The notFoundMiddleware should probably accept `NextFunction` too for completeness, though it's not strictly necessary.
+
+Also, in `random.ts` route, the 405 handler: `router.all("/", ...)` - I should make sure it doesn't interfere. Actually, in Express, `router.all` matches all HTTP methods. But `router.get` is defined first. For a GET request, Express will match the `get` route and execute it. Since we call `res.json`, the response is sent and the `all` route won't be reached. For POST/PUT/etc., the `get` route won't match, so `all` will match. This is correct.
+
+However, there is a subtlety: if we mount the router at `/random`, then requests to `/random/` (trailing slash) might behave differently depending on strict routing, but that's fine.
+
+One more thing: the `RandomResponse` type should be used in the controller. I did that.
+
+Error handling: The service doesn't throw, but if it did, the error middleware would catch it. The architecture mentions deterministic error handling.
+
+Should I include a README? The user asked to implement the logic, models, and endpoints. I'll provide the key files.
+
+Wait, the user said "database models" in the system prompt. The context doesn't mention a database. I should explicitly state that this stateless RNG endpoint requires no persistence layer, so no database models are included. This addresses the system prompt while respecting the specific task context.
+
+Let me double-check the explicit over clever principle. I'm using explicit interfaces, explicit dependency injection via factory functions, explicit 405 handling, explicit middleware ordering. Good.
+
+Let me review the code for any TypeScript issues:
+
+In `src/routes/random.ts`:
+```typescript
+import { Router, Request, Response } from "express";
+import { IRandomService } from "../types/services";
+import { RandomResponse, ErrorResponse } from "../types/api";
+
+export function createRandomRouter(randomService: IRandomService): Router {
+  const router = Router();
+
+  router.get("/", (_req: Request, res: Response<RandomResponse>) => {
+    const value = randomService.generate();
+    res.json({ random: value });
+  });
+
+  router.all("/", (_req: Request, res: Response<ErrorResponse>) => {
+    res.status(405).json({
+      error: "Method Not Allowed",
+      statusCode: 405,
+    });
+  });
+
+  return router;
+}
+```
+This looks correct.
+
+In `src/middleware/error.ts`:
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { ErrorResponse } from "../types/api";
+
+export function errorMiddleware(
+  err: Error,
+  _req: Request,
+  res: Response<ErrorResponse>,
+  _next: NextFunction
+): void {
+  console.error("Unhandled error:", err);
+  const statusCode = 500;
+  res.status(statusCode).json({
+    error: "Internal Server Error",
+    statusCode,
+  });
+}
+```
+Good. The error middleware must have 4 arguments for Express to recognize it as error middleware.
+
+In `src/middleware/notFound.ts`:
+```typescript
+import { Request, Response, NextFunction } from "express";
+import { ErrorResponse } from "../types/api";
+
+export function notFoundMiddleware(
+  _req: Request,
+  res: Response<ErrorResponse>,
+  _next: NextFunction
+): void {
+  res.status(404).json({
+    error: "Not Found",
+    statusCode: 404,
+  });
+}
+```
+Good.
+
+In `src/app.ts`:
+```typescript
+import express, { Application } from "express";
+import { createHealthRouter } from "./routes/health";
+import { createRandomRouter } from "./routes/random";
+import { errorMiddleware } from "./middleware/error";
+import { notFoundMiddleware } from "./middleware/notFound";
+import { IRandomService } from "./types/services";
+
+export interface AppDependencies {
+  randomService: IRandomService;
+}
+
+export function createApp(deps: AppDependencies): Application {
+  const app = express();
+
+  app.use(express.json());
+  app.use("/health", createHealthRouter());
+  app.use("/random", createRandomRouter(deps.randomService));
+  app.use(notFoundMiddleware);
+  app.use(errorMiddleware);
+
+  return app;
+}
+```
+Good.
+
+In `src/server.ts`:
+```typescript
+import { createApp } from "./app";
+import { RandomService } from "./services/random";
+import { ServerConfig } from "./types/config";
+
+function getConfigFromEnv(): ServerConfig {
+  const port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+  if (isNaN(port)) {
+    throw new Error(`Invalid PORT: ${process.env.PORT}`);
+  }
+  return { port };
+}
+
+function main(): void {
+  const config = getConfig
